@@ -1,0 +1,742 @@
+import React, { useState, useEffect, useRef } from 'react';import React, { useState, useEffect, useRef } from 'react';
+
+import { Mic, MicOff, BookOpen, PenTool, CheckCircle, AlertCircle, Play, Square, Printer, ChevronRight, BarChart2, User, RefreshCw } from 'lucide-react';
+
+// --- DATA & CONTENT REPOSITORY ---
+
+const GRADE_CONTENT = {
+  7: {
+    passageTitle: "The Spirit of Bayanihan",
+    passage: "In a small barrio in the Philippines, the spirit of Bayanihan is still very much alive. When Mang Jose needed to move his nipa hut to a safer location, the neighbors did not hesitate to help. Men carried the house on their shoulders with bamboo poles, while women prepared food for the volunteers. It was a heavy task, but the laughter and songs made the burden light. This tradition proves that unity and cooperation can overcome the heaviest of challenges.",
+    questions: [
+      { id: 1, type: "Literal", text: "What did the neighbors do to help Mang Jose?", options: ["Built a new house", "Carried his house", "Sold his house", "Painted his house"], answer: 1 },
+      { id: 2, type: "Literal", text: "Who prepared the food?", options: ["Mang Jose", "The children", "The women", "The village chief"], answer: 2 },
+      { id: 3, type: "Inferential", text: "Why did the task feel light despite being heavy?", options: ["The house was small", "They used machines", "They were happy helping", "It was raining"], answer: 2 },
+      { id: 4, type: "Inferential", text: "What does Bayanihan represent?", options: ["Cooking skills", "Building techniques", "Unity and cooperation", "Moving houses"], answer: 2 },
+      { id: 5, type: "Critical", text: "Is Bayanihan still relevant today? Why?", options: ["No, we have cranes now.", "Yes, helping others is timeless.", "No, it is too hard.", "Yes, but only in barrios."], answer: 1 }
+    ]
+  },
+  8: {
+    passageTitle: "The Rice Terraces",
+    passage: "Carved into the mountains of Ifugao, the Rice Terraces are often called the eighth wonder of the world. Built by our ancestors over two thousand years ago using only their bare hands, these terraces are a testament to Filipino ingenuity. They created an irrigation system using bamboo pipes to harness water from the rainforests. Today, preserving these terraces is not just about farming, but about honoring a rich cultural heritage.",
+    questions: [
+      { id: 1, type: "Literal", text: "Where are the Rice Terraces located?", options: ["Bohol", "Ifugao", "Davao", "Manila"], answer: 1 },
+      { id: 2, type: "Literal", text: "How long ago were they built?", options: ["100 years", "500 years", "1000 years", "2000 years"], answer: 3 },
+      { id: 3, type: "Inferential", text: "What trait did the ancestors show?", options: ["Laziness", "Ingenuity", "Impatience", "Fear"], answer: 1 },
+      { id: 4, type: "Inferential", text: "Why is preservation important?", options: ["To make money", "To honor heritage", "To grow more rice", "To attract tourists"], answer: 1 },
+      { id: 5, type: "Critical", text: "Why is manual labor sometimes better than machines?", options: ["It is cheaper.", "It shows dedication.", "It respects nature.", "All of the above."], answer: 3 }
+    ]
+  },
+  // Fallback for 9/10 using generic advanced text
+  9: {
+    passageTitle: "The Modern Jeepney",
+    passage: "The jeepney, once a symbol of post-war adaptation, faces a modern revolution. The government's modernization program aims to replace old, smoke-belching units with eco-friendly, air-conditioned vehicles. While this promises comfort and cleaner air, it sparks debate among drivers regarding costs and tradition. The challenge lies in balancing progress with the preservation of a cultural icon that has defined Filipino transportation for decades.",
+    questions: [
+      { id: 1, type: "Literal", text: "What is the goal of the program?", options: ["Ban all cars", "Replace old jeepneys", "Paint jeepneys", "Export jeepneys"], answer: 1 },
+      { id: 2, type: "Literal", text: "What is the main benefit mentioned?", options: ["Faster speed", "Cleaner air", "Cheaper fare", "More colors"], answer: 1 },
+      { id: 3, type: "Inferential", text: "Why are drivers debating this?", options: ["They hate AC", "Cost concerns", "They like smoke", "No reasons"], answer: 1 },
+      { id: 4, type: "Critical", text: "Is tradition more important than environment?", options: ["Always", "Never", "Needs balance", "Tradition is useless"], answer: 2 },
+      { id: 5, type: "Critical", text: "How does this affect the poor?", options: ["Higher fares likely", "No effect", "Free rides", "Less traffic"], answer: 0 }
+    ]
+  },
+  10: {
+    passageTitle: "Resilience in Storms",
+    passage: "The Philippines sits along the typhoon belt, making it prone to powerful storms annually. However, the true story isn't just about the destruction, but the resilience of its people. 'Bangon' (rise up) is a common mantra. Communities rebuild faster than the winds can tear them down. This resilience, however, must be paired with disaster preparedness and sustainable infrastructure to truly safeguard the future generation.",
+    questions: [
+      { id: 1, type: "Literal", text: "Where does the Philippines sit?", options: ["Equator", "Typhoon belt", "Atlantic", "Desert"], answer: 1 },
+      { id: 2, type: "Literal", text: "What is the common mantra?", options: ["Sleep", "Run", "Rise up", "Hide"], answer: 2 },
+      { id: 3, type: "Inferential", text: "What is implied about resilience alone?", options: ["It is enough", "It is useless", "Needs preparation too", "It causes storms"], answer: 2 },
+      { id: 4, type: "Critical", text: "Who is responsible for infrastructure?", options: ["Just the poor", "Government & society", "Foreigners", "Nobody"], answer: 1 },
+      { id: 5, type: "Critical", text: "How can we reduce damage?", options: ["Stop rain", "Build stronger", "Move country", "Ignore it"], answer: 1 }
+    ]
+  }
+};
+
+const WRITING_RUBRIC = {
+  grammar: { label: "Grammar & Syntax", max: 25 },
+  vocabulary: { label: "Vocabulary Usage", max: 25 },
+  mechanics: { label: "Mechanics (Spelling/Punctuation)", max: 25 },
+  organization: { label: "Organization & Coherence", max: 25 }
+};
+
+// --- HELPER FUNCTIONS ---
+
+const calculatePhilIRI = (totalWords, errors, comprehensionScore, totalQuestions) => {
+  const wordRecScore = ((totalWords - errors) / totalWords) * 100;
+  const compPercentage = (comprehensionScore / totalQuestions) * 100;
+
+  // Determine Reading Level based on Phil-IRI matrix
+  let wrLevel = 'Frustration';
+  if (wordRecScore >= 97) wrLevel = 'Independent';
+  else if (wordRecScore >= 90) wrLevel = 'Instructional';
+
+  let compLevel = 'Frustration';
+  if (compPercentage >= 80) compLevel = 'Independent';
+  else if (compPercentage >= 59) compLevel = 'Instructional';
+
+  // Overall level is the lower of the two
+  let overallLevel = 'Frustration';
+  if (wrLevel === 'Independent' && compLevel === 'Independent') overallLevel = 'Independent';
+  else if (wrLevel === 'Frustration' || compLevel === 'Frustration') overallLevel = 'Frustration';
+  else overallLevel = 'Instructional';
+
+  return { wordRecScore, compPercentage, overallLevel, wrLevel, compLevel };
+};
+
+const generateStudyPlan = (profile, data) => {
+  const plans = [];
+  const { overallLevel, compLevel, wrLevel } = data.results;
+  
+  // 1. Foundation / Decoding (If Word Rec is low)
+  if (wrLevel === 'Frustration') {
+    plans.push({
+      focus: "Decoding & Fluency",
+      priority: "High",
+      activities: [
+        "Repeated Reading Strategy: Read same passage 3x daily.",
+        "Sight Word Drills: Focus on Dolch list Grade 7-10.",
+        "Audio-Assisted Reading: Listen to audiobooks while following text."
+      ]
+    });
+  } else if (wrLevel === 'Instructional') {
+    plans.push({
+      focus: "Reading Speed & Prosody",
+      priority: "Medium",
+      activities: [
+        "Timed Reading: Record speed (WPM) weekly.",
+        "Choral Reading: Read aloud with a partner.",
+        "Phrasing Drills: Practice reading in meaningful chunks."
+      ]
+    });
+  }
+
+  // 2. Comprehension (If Comp is low)
+  if (compLevel === 'Frustration') {
+    plans.push({
+      focus: "Literal & Explicit Meaning",
+      priority: "High",
+      activities: [
+        "Story Mapping: Identify characters, setting, plot.",
+        "WH-Question Drills: Who, What, Where daily practice.",
+        "Vocabulary Logs: Write 3 new words daily with definitions."
+      ]
+    });
+  } else if (compLevel === 'Instructional') {
+    plans.push({
+      focus: "Inferential & Critical Thinking",
+      priority: "Medium",
+      activities: [
+        "Prediction Strategy: Guess what happens next.",
+        "Summarization: Write 1-sentence summaries of paragraphs.",
+        "Context Clues: Guess word meanings without a dictionary."
+      ]
+    });
+  }
+
+  // 3. Writing (General)
+  if (data.writingScore < 70) {
+    plans.push({
+      focus: "Sentence Structure & Mechanics",
+      priority: "High",
+      activities: ["Sentence Combining exercises.", "Journaling: 5 sentences daily.", "Proofreading checklists."]
+    });
+  } else {
+    plans.push({
+      focus: "Essay Structure & Flow",
+      priority: "Low",
+      activities: ["Outline creation before writing.", "Transition word practice.", "Persuasive essay drafts."]
+    });
+  }
+
+  return plans;
+};
+
+// --- COMPONENTS ---
+
+export default function App() {
+  const [view, setView] = useState('onboarding'); // onboarding, reading, comprehension, writing, results
+  const [student, setStudent] = useState({ name: '', grade: 7 });
+  
+  // Assessment State
+  const [readingData, setReadingData] = useState({
+    errors: 0,
+    time: 0,
+    transcript: '',
+    isRecording: false
+  });
+  const [compData, setCompData] = useState({});
+  const [writingData, setWritingData] = useState({ text: '', scores: { grammar: 15, vocabulary: 15, mechanics: 15, organization: 15 } });
+  
+  // Derived Data
+  const content = GRADE_CONTENT[student.grade] || GRADE_CONTENT[7];
+  const totalWords = content.passage.split(' ').length;
+
+  const handleStart = () => setView('reading');
+  
+  const resetApp = () => {
+    setView('onboarding');
+    setReadingData({ errors: 0, time: 0, transcript: '', isRecording: false });
+    setCompData({});
+    setWritingData({ text: '', scores: { grammar: 15, vocabulary: 15, mechanics: 15, organization: 15 } });
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
+        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg leading-tight text-slate-800">Phil-IRI Assessor AI</h1>
+              <p className="text-xs text-slate-500">DepEd Aligned • Grades 7-10</p>
+            </div>
+          </div>
+          
+          {view !== 'onboarding' && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                {student.name} • G{student.grade}
+              </span>
+              <button onClick={resetApp} className="p-2 hover:bg-slate-100 rounded-full text-slate-500" title="Reset">
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-4xl mx-auto p-4 md:p-6 print:p-0">
+        {view === 'onboarding' && (
+          <Onboarding student={student} setStudent={setStudent} onStart={handleStart} />
+        )}
+        
+        {view === 'reading' && (
+          <ReadingModule 
+            content={content} 
+            data={readingData} 
+            setData={setReadingData} 
+            totalWords={totalWords}
+            onNext={() => setView('comprehension')} 
+          />
+        )}
+
+        {view === 'comprehension' && (
+          <ComprehensionModule 
+            content={content} 
+            data={compData} 
+            setData={setCompData} 
+            onNext={() => setView('writing')} 
+          />
+        )}
+
+        {view === 'writing' && (
+          <WritingModule 
+            data={writingData} 
+            setData={setWritingData} 
+            onFinish={() => setView('results')} 
+          />
+        )}
+
+        {view === 'results' && (
+          <ResultsDashboard 
+            student={student}
+            readingData={readingData}
+            compData={compData}
+            writingData={writingData}
+            content={content}
+            totalWords={totalWords}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
+
+// --- SUB-COMPONENTS ---
+
+function Onboarding({ student, setStudent, onStart }) {
+  return (
+    <div className="max-w-md mx-auto mt-10 bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">Student Profile</h2>
+        <p className="text-slate-500">Enter details to begin the assessment.</p>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+          <div className="relative">
+            <User className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+            <input 
+              type="text" 
+              value={student.name}
+              onChange={(e) => setStudent({...student, name: e.target.value})}
+              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Juan Dela Cruz"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Grade Level</label>
+          <select 
+            value={student.grade}
+            onChange={(e) => setStudent({...student, grade: parseInt(e.target.value)})}
+            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            {[7, 8, 9, 10].map(g => <option key={g} value={g}>Grade {g}</option>)}
+          </select>
+        </div>
+
+        <button 
+          onClick={onStart}
+          disabled={!student.name}
+          className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          Start Assessment <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="mt-8 pt-6 border-t border-slate-100 text-xs text-slate-400 text-center">
+        Data is processed locally in your browser. No personal data is stored on external servers.
+      </div>
+    </div>
+  );
+}
+
+function ReadingModule({ content, data, setData, totalWords, onNext }) {
+  const recognitionRef = useRef(null);
+  const timerRef = useRef(null);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event) => {
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalTranscript) {
+           setData(prev => ({ ...prev, transcript: prev.transcript + ' ' + finalTranscript }));
+        }
+      };
+    }
+  }, []);
+
+  const toggleRecording = () => {
+    if (data.isRecording) {
+      // Stop
+      if (recognitionRef.current) recognitionRef.current.stop();
+      clearInterval(timerRef.current);
+      setData(prev => ({ ...prev, isRecording: false }));
+    } else {
+      // Start
+      if (recognitionRef.current) recognitionRef.current.start();
+      timerRef.current = setInterval(() => {
+        setData(prev => ({ ...prev, time: prev.time + 1 }));
+      }, 1000);
+      setData(prev => ({ ...prev, isRecording: true }));
+    }
+  };
+
+  const handleMiscue = (increment) => {
+    setData(prev => ({ ...prev, errors: Math.max(0, prev.errors + increment) }));
+  };
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-slate-800">Part 1: Oral Reading</h2>
+          <div className="flex items-center gap-4 text-sm font-mono bg-slate-100 px-3 py-1 rounded">
+            <span>⏱ {Math.floor(data.time / 60)}:{(data.time % 60).toString().padStart(2, '0')}</span>
+          </div>
+        </div>
+
+        <div className="prose max-w-none mb-6 p-6 bg-amber-50 rounded-lg border border-amber-100">
+          <h3 className="text-center font-bold text-amber-900 mb-4">{content.passageTitle}</h3>
+          <p className="text-lg leading-relaxed text-slate-800">{content.passage}</p>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* Controls */}
+          <div className="flex-1 space-y-4">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+              <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <Mic className="w-4 h-4" /> Audio Verification
+              </h4>
+              <p className="text-sm text-blue-700 mb-3">
+                Click mic to start reading. The AI will generate a transcript for review.
+              </p>
+              <button 
+                onClick={toggleRecording}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition ${
+                  data.isRecording 
+                  ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {data.isRecording ? <><Square className="w-4 h-4 fill-current"/> Stop Recording</> : <><Play className="w-4 h-4 fill-current"/> Start Recording</>}
+              </button>
+            </div>
+
+            {/* Transcript Preview */}
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 h-32 overflow-y-auto text-xs text-slate-500">
+              <strong className="block mb-1">AI Transcript (Beta):</strong>
+              {data.transcript || "Waiting for speech..."}
+            </div>
+          </div>
+
+          {/* Teacher Grading Panel */}
+          <div className="flex-1 bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+              <PenTool className="w-4 h-4" /> Assessor Marking
+            </h4>
+            <p className="text-xs text-slate-500 mb-4">
+              Manually mark errors (Miscues) for Phil-IRI accuracy.
+              <br/>(Mispronunciation, Omission, Substitution, Insertion, Repetition)
+            </p>
+            
+            <div className="flex items-center justify-between bg-slate-100 p-4 rounded-lg mb-4">
+              <span className="text-sm font-medium">Total Errors:</span>
+              <span className="text-2xl font-bold text-red-600">{data.errors}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => handleMiscue(1)} className="py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded transition font-medium">
+                + Add Error
+              </button>
+              <button onClick={() => handleMiscue(-1)} className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition font-medium">
+                Undo
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button onClick={onNext} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2">
+          Proceed to Comprehension <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ComprehensionModule({ content, data, setData, onNext }) {
+  const handleSelect = (qId, optionIndex) => {
+    setData(prev => ({ ...prev, [qId]: optionIndex }));
+  };
+
+  const answeredCount = Object.keys(data).length;
+  const isComplete = answeredCount === content.questions.length;
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
+        <h2 className="text-xl font-bold text-slate-800 mb-6">Part 2: Comprehension Check</h2>
+        
+        <div className="space-y-8">
+          {content.questions.map((q, idx) => (
+            <div key={q.id} className="border-b border-slate-100 pb-6 last:border-0">
+              <div className="flex items-start gap-3 mb-3">
+                <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded mt-1">
+                  {q.type}
+                </span>
+                <p className="font-medium text-slate-800 text-lg">{idx + 1}. {q.text}</p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-2">
+                {q.options.map((opt, optIdx) => (
+                  <button
+                    key={optIdx}
+                    onClick={() => handleSelect(q.id, optIdx)}
+                    className={`text-left px-4 py-3 rounded-lg border transition ${
+                      data[q.id] === optIdx 
+                      ? 'bg-blue-50 border-blue-500 text-blue-800 ring-1 ring-blue-500' 
+                      : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button 
+          onClick={onNext} 
+          disabled={!isComplete}
+          className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Proceed to Writing <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WritingModule({ data, setData, onFinish }) {
+  const handleScoreChange = (category, val) => {
+    setData(prev => ({
+      ...prev,
+      scores: { ...prev.scores, [category]: parseInt(val) }
+    }));
+  };
+
+  const totalScore = Object.values(data.scores).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-xl font-bold text-slate-800 mb-4">Part 3: Writing Assessment</h2>
+            <div className="bg-blue-50 p-4 rounded-lg text-blue-900 mb-4 text-sm">
+              <strong>Prompt:</strong> Write a short reflection (3-5 sentences) about the importance of helping others in your community.
+            </div>
+            <textarea 
+              value={data.text}
+              onChange={(e) => setData({...data, text: e.target.value})}
+              className="w-full h-64 p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed"
+              placeholder="Type your answer here..."
+            />
+          </div>
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-full">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <BarChart2 className="w-4 h-4"/> Rubric Scoring
+            </h3>
+            <p className="text-xs text-slate-500 mb-6">
+              Assessor use only. Slide to rate based on written output.
+            </p>
+
+            <div className="space-y-6">
+              {Object.entries(WRITING_RUBRIC).map(([key, config]) => (
+                <div key={key}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <label className="font-medium text-slate-700">{config.label}</label>
+                    <span className="font-bold text-blue-600">{data.scores[key]}/{config.max}</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max={config.max} 
+                    value={data.scores[key]}
+                    onChange={(e) => handleScoreChange(key, e.target.value)}
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  />
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <div className="flex justify-between items-center mb-6">
+                <span className="text-slate-600 font-medium">Total Score</span>
+                <span className={`text-2xl font-bold ${totalScore < 75 ? 'text-amber-600' : 'text-green-600'}`}>
+                  {totalScore}%
+                </span>
+              </div>
+              <button 
+                onClick={onFinish}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium"
+              >
+                Generate Report
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultsDashboard({ student, readingData, compData, writingData, content, totalWords }) {
+  // 1. Calculate Comprehension
+  let compCorrect = 0;
+  content.questions.forEach(q => {
+    if (compData[q.id] === q.answer) compCorrect++;
+  });
+  
+  // 2. Run Phil-IRI Logic
+  const results = calculatePhilIRI(totalWords, readingData.errors, compCorrect, content.questions.length);
+  
+  // 3. Writing Logic
+  const writingTotal = Object.values(writingData.scores).reduce((a, b) => a + b, 0);
+  let writingLevel = "Beginning";
+  if (writingTotal >= 85) writingLevel = "Advanced";
+  else if (writingTotal >= 70) writingLevel = "Proficient";
+  else if (writingTotal >= 50) writingLevel = "Developing";
+
+  // 4. Generate Plan
+  const studyPlan = generateStudyPlan(student, { results, writingScore: writingTotal });
+
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="animate-in fade-in zoom-in-95 duration-500 pb-20">
+      
+      {/* Action Bar */}
+      <div className="flex justify-between items-center mb-6 print:hidden">
+        <h2 className="text-2xl font-bold text-slate-800">Assessment Report</h2>
+        <button onClick={handlePrint} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium">
+          <Printer className="w-4 h-4" /> Print / Save PDF
+        </button>
+      </div>
+
+      {/* REPORT CONTAINER */}
+      <div className="bg-white p-8 rounded-xl shadow-lg border border-slate-200 print:shadow-none print:border-0 print:p-0 max-w-4xl mx-auto" id="printable-report">
+        
+        {/* Header Report */}
+        <div className="border-b-2 border-slate-800 pb-6 mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Learner Assessment Profile</h1>
+            <p className="text-slate-500 mt-1">Phil-IRI Form 4A (Automated) • DepEd JHS English</p>
+          </div>
+          <div className="text-right">
+            <p className="text-lg font-bold text-slate-900">{student.name}</p>
+            <p className="text-slate-600">Grade {student.grade} • {new Date().toLocaleDateString()}</p>
+          </div>
+        </div>
+
+        {/* 1. Phil-IRI Summary Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          
+          {/* Word Recognition Card */}
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Word Recognition</h3>
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-3xl font-bold text-slate-800">{results.wordRecScore.toFixed(1)}%</span>
+              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                results.wrLevel === 'Frustration' ? 'bg-red-100 text-red-700' :
+                results.wrLevel === 'Instructional' ? 'bg-amber-100 text-amber-700' : 
+                'bg-green-100 text-green-700'
+              }`}>{results.wrLevel}</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              {readingData.errors} Miscues / {totalWords} Words
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Time: {readingData.time}s ({Math.round(totalWords / (readingData.time/60))} WPM)
+            </p>
+          </div>
+
+          {/* Comprehension Card */}
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Comprehension</h3>
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-3xl font-bold text-slate-800">{results.compPercentage.toFixed(0)}%</span>
+              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                results.compLevel === 'Frustration' ? 'bg-red-100 text-red-700' :
+                results.compLevel === 'Instructional' ? 'bg-amber-100 text-amber-700' : 
+                'bg-green-100 text-green-700'
+              }`}>{results.compLevel}</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              {compCorrect} / {content.questions.length} Correct Answers
+            </p>
+          </div>
+
+          {/* Final Rating Card */}
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-2">Overall Phil-IRI Level</h3>
+            <div className="text-3xl font-bold text-blue-900 mb-1">{results.overallLevel}</div>
+            <p className="text-xs text-blue-700 leading-snug">
+              Based on the lower score of Word Recognition and Comprehension.
+            </p>
+          </div>
+        </div>
+
+        {/* 2. Detailed Breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+          <div>
+            <h4 className="font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Writing Proficiency</h4>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-slate-600">Total Score</span>
+              <span className="font-bold">{writingTotal}/100 ({writingLevel})</span>
+            </div>
+            <div className="space-y-2">
+              {Object.entries(writingData.scores).map(([k, v]) => (
+                <div key={k} className="flex justify-between text-sm">
+                  <span className="capitalize text-slate-500">{k}</span>
+                  <span className="font-medium text-slate-800">{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div>
+             <h4 className="font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Comprehension Analysis</h4>
+             <ul className="space-y-2 text-sm">
+                {content.questions.map((q) => {
+                  const isCorrect = compData[q.id] === q.answer;
+                  return (
+                    <li key={q.id} className="flex items-start gap-2">
+                      {isCorrect ? <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" /> : <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />}
+                      <span className="text-slate-600">
+                        <strong className="text-slate-800">{q.type}:</strong> {isCorrect ? 'Correct' : 'Incorrect'}
+                      </span>
+                    </li>
+                  )
+                })}
+             </ul>
+          </div>
+        </div>
+
+        {/* 3. Study Plan (The Intervention) */}
+        <div className="bg-amber-50 p-6 rounded-xl border border-amber-200">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="bg-amber-500 p-1.5 rounded-lg text-white">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <h3 className="text-xl font-bold text-amber-900">Personalized Study Plan (4 Weeks)</h3>
+          </div>
+
+          <div className="space-y-6">
+            {studyPlan.map((plan, idx) => (
+              <div key={idx} className="bg-white p-4 rounded-lg border border-amber-100 shadow-sm">
+                <div className="flex justify-between items-start mb-3">
+                  <h4 className="font-bold text-slate-800 text-lg">{plan.focus}</h4>
+                  <span className={`text-xs px-2 py-1 rounded font-bold uppercase ${
+                    plan.priority === 'High' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                  }`}>{plan.priority} Priority</span>
+                </div>
+                <ul className="list-disc pl-5 space-y-1">
+                  {plan.activities.map((act, i) => (
+                    <li key={i} className="text-slate-600 text-sm">{act}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-amber-200 text-sm text-amber-800 italic">
+            <strong>Note to Parents/Guardians:</strong> Please support the learner by allotting 15-20 minutes daily for the suggested reading activities. Reassessment is recommended in 4 weeks.
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-12 text-center text-xs text-slate-400">
+          Generated by Phil-IRI Assessor AI • Compliant with DepEd Order No. 14, s. 2018 (Policy on Phil-IRI)
+        </div>
+      </div>
+    </div>
+  );
+}
